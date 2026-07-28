@@ -299,9 +299,13 @@
     sep.className = 'lb-separator';
     sep.textContent = '– – –';
     lbTrack.appendChild(sep);
+
+    // Sprungpunkt = Höhe der ersten Liste UND der Trennzeile zusammen -
+    // erst danach beginnt visuell wieder "Platz 1" (die zweite, identische Kopie).
+    const wrapDistance = lbTrack.scrollHeight;
     appendList();
 
-    halfTrackHeight = singleHeight;
+    halfTrackHeight = wrapDistance;
     isScrolling = true;
   }
 
