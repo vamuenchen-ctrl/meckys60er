@@ -256,12 +256,30 @@
     return row;
   }
 
-  function renderLeaderboard(entries) {
-    lbTrack.innerHTML = '';
-    lbTrack.style.transform = 'translateY(0px)';
-    scrollOffset = 0;
+  let lastAppliedSignature = null;
+  let pendingEntries = null;
+  let pendingSignature = null;
 
-    if (entries.length === 0) {
+  function rankEntries(entries) {
+    let rank = 0, prevScore = null;
+    return entries.map(function (e, i) {
+      if (e.score !== prevScore) { rank = i + 1; prevScore = e.score; }
+      return { rank: rank, name: e.name, score: e.score, total: e.total };
+    });
+  }
+
+  // Baut die Anzeige komplett neu auf und startet den Scroll-Fortschritt bei 0 -
+  // wird nur an einem "Rundenwechsel" aufgerufen (oder wenn gerade gar nicht gescrollt wird).
+  function applyLeaderboard(rankedEntries, signature) {
+    lastAppliedSignature = signature;
+    pendingEntries = null;
+    pendingSignature = null;
+
+    lbTrack.innerHTML = '';
+    scrollOffset = 0;
+    lbTrack.style.transform = 'translateY(0px)';
+
+    if (rankedEntries.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'lb-empty';
       empty.textContent = 'Noch keine Ergebnisse.';
@@ -270,12 +288,6 @@
       halfTrackHeight = 0;
       return;
     }
-
-    let rank = 0, prevScore = null;
-    const rankedEntries = entries.map(function (e, i) {
-      if (e.score !== prevScore) { rank = i + 1; prevScore = e.score; }
-      return { rank: rank, name: e.name, score: e.score, total: e.total };
-    });
 
     function appendList() {
       rankedEntries.forEach(function (e) {
@@ -309,6 +321,28 @@
     isScrolling = true;
   }
 
+  // Wird bei jedem Datenabruf aufgerufen. Während gerade gescrollt wird, werden
+  // Änderungen nur "gemerkt" und erst beim nächsten Rundenwechsel angezeigt -
+  // damit sich die Liste nie mitten im Durchlauf sichtbar verändert.
+  function handleLeaderboardData(entries) {
+    const rankedEntries = rankEntries(entries);
+    const signature = JSON.stringify(rankedEntries);
+
+    if (signature === lastAppliedSignature) {
+      pendingEntries = null;
+      pendingSignature = null;
+      return;
+    }
+
+    if (!isScrolling) {
+      // Nichts läuft gerade - kann sofort übernommen werden
+      applyLeaderboard(rankedEntries, signature);
+    } else {
+      pendingEntries = rankedEntries;
+      pendingSignature = signature;
+    }
+  }
+
   async function refreshLeaderboard() {
     try {
       const { data, error } = await sb
@@ -316,10 +350,15 @@
         .select('name, score, total')
         .order('score', { ascending: false });
       if (error) throw error;
-      renderLeaderboard(data || []);
+      handleLeaderboardData(data || []);
     } catch (e) {
-      lbTrack.innerHTML = '<div class="lb-empty">Rangliste gerade nicht verfügbar.</div>';
-      isScrolling = false;
+      if (lastAppliedSignature !== null || lbTrack.children.length === 0) {
+        lbTrack.innerHTML = '<div class="lb-empty">Rangliste gerade nicht verfügbar.</div>';
+        isScrolling = false;
+        lastAppliedSignature = null;
+        pendingEntries = null;
+        pendingSignature = null;
+      }
     }
   }
 
@@ -331,7 +370,12 @@
 
       scrollOffset += SCROLL_PIXEL_PRO_SEKUNDE * deltaSeconds;
       if (halfTrackHeight > 0 && scrollOffset >= halfTrackHeight) {
-        scrollOffset -= halfTrackHeight;
+        if (pendingEntries !== null) {
+          // Rundenwechsel erreicht und neue Daten warten - jetzt übernehmen
+          applyLeaderboard(pendingEntries, pendingSignature);
+        } else {
+          scrollOffset -= halfTrackHeight;
+        }
       }
       lbTrack.style.transform = 'translateY(-' + scrollOffset + 'px)';
     } else {
