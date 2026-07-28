@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meckys 60er Quiz – Slideshow</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --plum: #3b1f2b;
+    --plum-light: #5a2f42;
+    --gold: #c9a24b;
+    --gold-light: #e6cd8a;
+    --cream: #f7f3ec;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  .stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+  .slide-photo {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+  .slide-photo.visible { opacity: 1; }
+
+  /* --- Rangliste oben rechts --- */
+  .leaderboard-box {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    width: 300px;
+    max-height: 55vh;
+    background: rgba(59, 31, 43, 0.88);
+    border: 1px solid rgba(230, 205, 138, 0.35);
+    border-radius: 14px;
+    padding: 14px 0 0;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+  .lb-title {
+    color: var(--gold-light);
+    font-weight: 800;
+    font-size: 1.1rem;
+    text-align: center;
+    margin-bottom: 10px;
+    padding: 0 16px;
+  }
+  .lb-viewport {
+    overflow: hidden;
+    max-height: calc(55vh - 46px);
+    padding-bottom: 10px;
+  }
+  .lb-track {
+    will-change: transform;
+  }
+  .lb-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    color: var(--cream);
+    font-size: 0.95rem;
+  }
+  .lb-rank { width: 24px; font-weight: 800; color: var(--gold-light); text-align: center; }
+  .lb-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-score { font-weight: 700; color: var(--gold-light); }
+  .lb-empty { color: #d8c9cf; text-align: center; padding: 10px 16px 16px; font-size: 0.9rem; }
+  .lb-separator {
+    text-align: center;
+    color: rgba(230, 205, 138, 0.35);
+    letter-spacing: 4px;
+    padding: 8px 0;
+    font-size: 0.9rem;
+  }
+
+  /* --- QR-Code unten rechts --- */
+  .qr-box {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    background: #fff;
+    border-radius: 14px;
+    padding: 14px 14px 10px;
+    text-align: center;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+  .qr-box img {
+    width: 150px;
+    height: 150px;
+    display: block;
+  }
+  .qr-label {
+    margin-top: 8px;
+    color: var(--plum);
+    font-weight: 800;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <img id="slidePhoto" class="slide-photo" alt="Kinderfoto">
+
+  <div class="leaderboard-box">
+    <div class="lb-title">🏆 Rangliste</div>
+    <div class="lb-viewport" id="lbViewport">
+      <div class="lb-track" id="lbTrack"></div>
+    </div>
+  </div>
+
+  <div class="qr-box">
+    <img src="data:image/png;base64,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" alt="QR-Code zum Quiz">
+    <div class="qr-label">Jetzt mitraten!</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ==================================================================
+  // EINSTELLUNGEN - hier kannst du selbst Werte anpassen
+  // ==================================================================
+  const SLIDE_DAUER_SEKUNDEN = 8;      // Wie lange jedes Foto zu sehen ist
+  const SCROLL_PIXEL_PRO_SEKUNDE = 22; // Wie schnell die Rangliste durchläuft
+
+  // Liste der Foto-Dateien (liegen im Ordner "fotos/" im selben Repo).
+  // Weitere Fotos einfach als weitere Zeile ergänzen, z.B.: 'fotos/dein-dateiname.jpg',
+  const PHOTO_FILES = [
+    'fotos/x-20260724_142126.jpg',
+    'fotos/x-20260724_142145.jpg',
+    'fotos/x-20260724_142217.jpg',
+    'fotos/x-20260724_142230.jpg',
+    'fotos/x-20260724_142249.jpg',
+    'fotos/x-20260724_142256.jpg',
+    'fotos/x-20260724_142306.jpg',
+    'fotos/x-20260724_142357.jpg',
+    'fotos/x-20260724_142409.jpg',
+    'fotos/x-20260724_142432.jpg',
+    'fotos/x-20260724_142936.jpg',
+    'fotos/x-20260724_142950.jpg',
+    'fotos/x-20260724_143021.jpg',
+    // Weitere Fotos hier ergänzen:
+  ];
+  // ==================================================================
+
+  const SUPABASE_URL = 'https://hszlyokjarldgfrwjigp.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhzemx5b2tqYXJsZGdmcndqaWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMzQ3OTcsImV4cCI6MjEwMDgxMDc5N30.kGpRHs6OJLsSj5XiBHKTN_s10a7lRFv5IqyshXZhUms';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const slidePhoto = document.getElementById('slidePhoto');
+  const lbViewport = document.getElementById('lbViewport');
+  const lbTrack = document.getElementById('lbTrack');
+
+  // ---- Foto-Slideshow ----
+  function shuffled(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  let order = shuffled(PHOTO_FILES);
+  let photoIndex = 0;
+
+  function showNextPhoto() {
+    if (PHOTO_FILES.length === 0) return;
+    if (photoIndex >= order.length) {
+      order = shuffled(PHOTO_FILES);
+      photoIndex = 0;
+    }
+    const src = order[photoIndex];
+    photoIndex++;
+
+    slidePhoto.classList.remove('visible');
+    setTimeout(function () {
+      slidePhoto.src = src;
+      slidePhoto.classList.add('visible');
+    }, 250);
+  }
+
+  // ---- Rangliste (Endlos-Ticker) ----
+  let scrollOffset = 0;
+  let halfTrackHeight = 0;
+  let isScrolling = false;
+  let lastFrameTime = null;
+
+  function buildRow(rank, name, score, total) {
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    row.innerHTML =
+      '<span class="lb-rank">' + rank + '.</span>' +
+      '<span class="lb-name"></span>' +
+      '<span class="lb-score">' + score + '/' + total + '</span>';
+    row.querySelector('.lb-name').textContent = name;
+    return row;
+  }
+
+  function renderLeaderboard(entries) {
+    lbTrack.innerHTML = '';
+    lbTrack.style.transform = 'translateY(0px)';
+    scrollOffset = 0;
+
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'lb-empty';
+      empty.textContent = 'Noch keine Ergebnisse.';
+      lbTrack.appendChild(empty);
+      isScrolling = false;
+      halfTrackHeight = 0;
+      return;
+    }
+
+    let rank = 0, prevScore = null;
+    const rankedEntries = entries.map(function (e, i) {
+      if (e.score !== prevScore) { rank = i + 1; prevScore = e.score; }
+      return { rank: rank, name: e.name, score: e.score, total: e.total };
+    });
+
+    function appendList() {
+      rankedEntries.forEach(function (e) {
+        lbTrack.appendChild(buildRow(e.rank, e.name, e.score, e.total));
+      });
+    }
+
+    appendList();
+    const viewportHeight = lbViewport.clientHeight;
+    const singleHeight = lbTrack.scrollHeight;
+
+    if (singleHeight <= viewportHeight) {
+      // passt komplett drauf - kein Scrollen nötig
+      isScrolling = false;
+      halfTrackHeight = 0;
+      return;
+    }
+
+    // Trennzeile + zweite Kopie für nahtloses Endlos-Scrollen
+    const sep = document.createElement('div');
+    sep.className = 'lb-separator';
+    sep.textContent = '– – –';
+    lbTrack.appendChild(sep);
+    appendList();
+
+    halfTrackHeight = singleHeight;
+    isScrolling = true;
+  }
+
+  async function refreshLeaderboard() {
+    try {
+      const { data, error } = await sb
+        .from('leaderboard')
+        .select('name, score, total')
+        .order('score', { ascending: false });
+      if (error) throw error;
+      renderLeaderboard(data || []);
+    } catch (e) {
+      lbTrack.innerHTML = '<div class="lb-empty">Rangliste gerade nicht verfügbar.</div>';
+      isScrolling = false;
+    }
+  }
+
+  function scrollTick(timestamp) {
+    if (isScrolling) {
+      if (lastFrameTime === null) lastFrameTime = timestamp;
+      const deltaSeconds = (timestamp - lastFrameTime) / 1000;
+      lastFrameTime = timestamp;
+
+      scrollOffset += SCROLL_PIXEL_PRO_SEKUNDE * deltaSeconds;
+      if (halfTrackHeight > 0 && scrollOffset >= halfTrackHeight) {
+        scrollOffset -= halfTrackHeight;
+      }
+      lbTrack.style.transform = 'translateY(-' + scrollOffset + 'px)';
+    } else {
+      lastFrameTime = timestamp;
+    }
+    requestAnimationFrame(scrollTick);
+  }
+
+  // ---- Gemeinsamer Takt: Foto + Rangliste ----
+  function tick() {
+    showNextPhoto();
+    refreshLeaderboard();
+  }
+
+  tick();
+  setInterval(tick, SLIDE_DAUER_SEKUNDEN * 1000);
+  requestAnimationFrame(scrollTick);
+
+  // Sicherheitsnetz: Seite alle 2 Stunden neu laden (gegen Speicherprobleme im Dauerbetrieb)
+  setTimeout(function () { location.reload(); }, 2 * 60 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
