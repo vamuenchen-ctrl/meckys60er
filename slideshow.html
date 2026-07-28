@@ -23,17 +23,22 @@
   .stage {
     position: fixed;
     inset: 0;
+    background: #000;
+  }
+  .photo-stage {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #000;
   }
   .slide-photo {
+    position: absolute;
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
     opacity: 0;
-    transition: opacity 0.8s ease;
+    transition: opacity 1.2s ease;
   }
   .slide-photo.visible { opacity: 1; }
 
@@ -113,7 +118,10 @@
 </head>
 <body>
 <div class="stage">
-  <img id="slidePhoto" class="slide-photo" alt="Kinderfoto">
+  <div class="photo-stage">
+    <img id="photoA" class="slide-photo" alt="Kinderfoto">
+    <img id="photoB" class="slide-photo" alt="Kinderfoto">
+  </div>
 
   <div class="leaderboard-box">
     <div class="lb-title">🏆 Rangliste</div>
@@ -190,7 +198,8 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhzemx5b2tqYXJsZGdmcndqaWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMzQ3OTcsImV4cCI6MjEwMDgxMDc5N30.kGpRHs6OJLsSj5XiBHKTN_s10a7lRFv5IqyshXZhUms';
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const slidePhoto = document.getElementById('slidePhoto');
+  const photoA = document.getElementById('photoA');
+  const photoB = document.getElementById('photoB');
   const lbViewport = document.getElementById('lbViewport');
   const lbTrack = document.getElementById('lbTrack');
 
@@ -206,6 +215,7 @@
 
   let order = shuffled(PHOTO_FILES);
   let photoIndex = 0;
+  let activeIsA = true;
 
   function showNextPhoto() {
     if (PHOTO_FILES.length === 0) return;
@@ -216,11 +226,17 @@
     const src = order[photoIndex];
     photoIndex++;
 
-    slidePhoto.classList.remove('visible');
-    setTimeout(function () {
-      slidePhoto.src = src;
-      slidePhoto.classList.add('visible');
-    }, 250);
+    const showing = activeIsA ? photoA : photoB;
+    const hidden = activeIsA ? photoB : photoA;
+
+    // Neues Foto komplett im Hintergrund laden, bevor es eingeblendet wird -
+    // dadurch kein Aufblitzen des alten Fotos mehr.
+    hidden.onload = function () {
+      hidden.classList.add('visible');
+      showing.classList.remove('visible');
+      activeIsA = !activeIsA;
+    };
+    hidden.src = src;
   }
 
   // ---- Rangliste (Endlos-Ticker) ----
