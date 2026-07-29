@@ -47,16 +47,19 @@
     position: absolute;
     top: 24px;
     right: 24px;
+    bottom: 300px;
     width: 300px;
-    max-height: 55vh;
     background: rgba(59, 31, 43, 0.88);
     border: 1px solid rgba(230, 205, 138, 0.35);
     border-radius: 14px;
     padding: 14px 0 0;
     overflow: hidden;
     box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
   }
   .lb-title {
+    flex: 0 0 auto;
     color: var(--gold-light);
     font-weight: 800;
     font-size: 1.1rem;
@@ -65,8 +68,8 @@
     padding: 0 16px;
   }
   .lb-viewport {
+    flex: 1 1 auto;
     overflow: hidden;
-    max-height: calc(55vh - 46px);
     padding-bottom: 10px;
   }
   .lb-track {
