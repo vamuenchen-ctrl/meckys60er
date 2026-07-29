@@ -82,6 +82,7 @@
   }
   .lb-rank { width: 24px; font-weight: 800; color: var(--gold-light); text-align: center; }
   .lb-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-time { font-size: 0.8rem; color: #c9b3ba; min-width: 34px; text-align: right; }
   .lb-score { font-weight: 700; color: var(--gold-light); }
   .lb-empty { color: #d8c9cf; text-align: center; padding: 10px 16px 16px; font-size: 0.9rem; }
   .lb-separator {
@@ -245,12 +246,22 @@
   let isScrolling = false;
   let lastFrameTime = null;
 
-  function buildRow(rank, name, score, total) {
+  function formatDuration(seconds) {
+    if (seconds == null) return '';
+    const s = Math.round(seconds);
+    if (s < 60) return s + 's';
+    const m = Math.floor(s / 60);
+    const rest = s % 60;
+    return m + ':' + String(rest).padStart(2, '0');
+  }
+
+  function buildRow(rank, name, score, total, durationSeconds) {
     const row = document.createElement('div');
     row.className = 'lb-row';
     row.innerHTML =
       '<span class="lb-rank">' + rank + '.</span>' +
       '<span class="lb-name"></span>' +
+      '<span class="lb-time">' + formatDuration(durationSeconds) + '</span>' +
       '<span class="lb-score">' + score + '/' + total + '</span>';
     row.querySelector('.lb-name').textContent = name;
     return row;
@@ -261,10 +272,14 @@
   let pendingSignature = null;
 
   function rankEntries(entries) {
-    let rank = 0, prevScore = null;
+    let rank = 0, prevScore = null, prevDuration = null;
     return entries.map(function (e, i) {
-      if (e.score !== prevScore) { rank = i + 1; prevScore = e.score; }
-      return { rank: rank, name: e.name, score: e.score, total: e.total };
+      if (e.score !== prevScore || e.duration_seconds !== prevDuration) {
+        rank = i + 1;
+        prevScore = e.score;
+        prevDuration = e.duration_seconds;
+      }
+      return { rank: rank, name: e.name, score: e.score, total: e.total, duration_seconds: e.duration_seconds };
     });
   }
 
@@ -291,7 +306,7 @@
 
     function appendList() {
       rankedEntries.forEach(function (e) {
-        lbTrack.appendChild(buildRow(e.rank, e.name, e.score, e.total));
+        lbTrack.appendChild(buildRow(e.rank, e.name, e.score, e.total, e.duration_seconds));
       });
     }
 
@@ -347,8 +362,9 @@
     try {
       const { data, error } = await sb
         .from('leaderboard')
-        .select('name, score, total')
-        .order('score', { ascending: false });
+        .select('name, score, total, duration_seconds')
+        .order('score', { ascending: false })
+        .order('duration_seconds', { ascending: true, nullsFirst: false });
       if (error) throw error;
       handleLeaderboardData(data || []);
     } catch (e) {

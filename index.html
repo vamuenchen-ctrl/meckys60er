@@ -248,6 +248,7 @@
     color: var(--gold-light);
   }
   .lb-name { flex: 1; font-weight: 600; }
+  .lb-time { font-size: 0.8rem; color: #c9b3ba; min-width: 34px; text-align: right; }
   .lb-score { font-weight: 700; color: var(--gold-light); }
   .lb-me { background: rgba(201,162,75,0.12); border-radius: 10px; }
   .lb-empty { text-align: center; color: #c9b3ba; padding: 20px 0; }
@@ -339,6 +340,8 @@
   let score = 0;
   let answeredCurrent = false;
   let zoomLevel = 1;
+  let roundStartTime = null;
+  let lastDurationSeconds = null;
   const HIT_RADIUS = 11;  // Prozentpunkte Toleranz
 
   // ---- Supabase (Rangliste) ----
@@ -413,6 +416,7 @@
     order = shuffled(PHOTO_META.length);
     currentPos = 0;
     score = 0;
+    roundStartTime = Date.now();
     showScreen('play');
     renderCurrentPhoto();
   });
@@ -517,6 +521,9 @@
     resultLabel.textContent = score === PHOTO_META.length
       ? 'Perfekt erkannt – sie kann sich nicht verstecken! 🎯'
       : 'richtig erkannt';
+    lastDurationSeconds = roundStartTime
+      ? Math.round((Date.now() - roundStartTime) / 1000)
+      : null;
     scoreSubmitAttempted = false;
     showScreen('result');
   }
@@ -527,15 +534,24 @@
     try {
       const { data: existing } = await sb
         .from('leaderboard')
-        .select('score')
+        .select('score, duration_seconds')
         .eq('name', playerName)
         .maybeSingle();
 
-      if (!existing || score > existing.score) {
+      const existingDuration = existing && existing.duration_seconds != null
+        ? existing.duration_seconds
+        : Infinity;
+
+      const isBetter = !existing
+        || score > existing.score
+        || (score === existing.score && lastDurationSeconds != null && lastDurationSeconds < existingDuration);
+
+      if (isBetter) {
         await sb.from('leaderboard').upsert({
           name: playerName,
           score: score,
           total: PHOTO_META.length,
+          duration_seconds: lastDurationSeconds,
           finished_at: new Date().toISOString()
         }, { onConflict: 'name' });
       }
@@ -552,8 +568,9 @@
     try {
       const { data, error } = await sb
         .from('leaderboard')
-        .select('name, score, total')
-        .order('score', { ascending: false });
+        .select('name, score, total, duration_seconds')
+        .order('score', { ascending: false })
+        .order('duration_seconds', { ascending: true, nullsFirst: false });
       if (error) throw error;
       entries = data || [];
     } catch (e) {
@@ -572,24 +589,36 @@
       return;
     }
 
-    entries.sort((a, b) => b.score - a.score);
-
+    // Bei Punktegleichheit entscheidet die Zeit (schneller = besserer Rang) -
+    // nur bei exakt gleicher Punktzahl UND Zeit teilen sich zwei den gleichen Rang.
     let rank = 0;
     let prevScore = null;
+    let prevDuration = null;
     entries.forEach((entry, i) => {
-      if (entry.score !== prevScore) {
+      if (entry.score !== prevScore || entry.duration_seconds !== prevDuration) {
         rank = i + 1;
         prevScore = entry.score;
+        prevDuration = entry.duration_seconds;
       }
       const li = document.createElement('li');
       li.className = 'lb-item' + (entry.name === playerName ? ' lb-me' : '');
       li.innerHTML = `
         <span class="lb-rank">${rank}.</span>
         <span class="lb-name">${escapeHtml(entry.name)}</span>
+        <span class="lb-time">${formatDuration(entry.duration_seconds)}</span>
         <span class="lb-score">${entry.score}/${entry.total}</span>
       `;
       lbList.appendChild(li);
     });
+  }
+
+  function formatDuration(seconds) {
+    if (seconds == null) return '';
+    const s = Math.round(seconds);
+    if (s < 60) return s + 's';
+    const m = Math.floor(s / 60);
+    const rest = s % 60;
+    return m + ':' + String(rest).padStart(2, '0');
   }
 
   function escapeHtml(str) {
@@ -609,6 +638,7 @@
     order = shuffled(PHOTO_META.length);
     currentPos = 0;
     score = 0;
+    roundStartTime = Date.now();
     showScreen('play');
     renderCurrentPhoto();
   }
