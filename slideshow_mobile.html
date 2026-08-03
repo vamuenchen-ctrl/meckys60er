@@ -37,9 +37,35 @@
     max-height: 100%;
     object-fit: contain;
     opacity: 0;
-    transition: opacity 1.2s ease;
+    transition: opacity 0.5s ease;
   }
   .slide-photo.visible { opacity: 1; }
+
+  /* --- Navigation: < / > --- */
+  .nav-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(59, 31, 43, 0.72);
+    border: 1px solid rgba(230, 205, 138, 0.4);
+    color: var(--gold-light);
+    font-size: 1.8rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+  }
+  .nav-button:active {
+    background: rgba(59, 31, 43, 0.9);
+  }
+  .nav-prev { left: 16px; }
+  .nav-next { right: 16px; }
 
   /* --- CTA-Button unten --- */
   .cta-box {
@@ -76,6 +102,9 @@
     <img id="photoB" class="slide-photo" alt="Kinderfoto">
   </div>
 
+  <button class="nav-button nav-prev" id="prevBtn" aria-label="Vorheriges Foto">&lt;</button>
+  <button class="nav-button nav-next" id="nextBtn" aria-label="Nächstes Foto">&gt;</button>
+
   <div class="cta-box">
     <a class="cta-button" href="https://vamuenchen-ctrl.github.io/meckys60er/" rel="noopener">Zurück zum Quiz</a>
   </div>
@@ -86,7 +115,6 @@
   // ==================================================================
   // EINSTELLUNGEN - hier kannst du selbst Werte anpassen
   // ==================================================================
-  const SLIDE_DAUER_SEKUNDEN = 8;      // Wie lange jedes Foto zu sehen ist
 
   // Liste der Foto-Dateien (liegen im Ordner "fotos/" im selben Repo).
   // Weitere Fotos einfach als weitere Zeile ergänzen, z.B.: 'fotos/dein-dateiname.jpg',
@@ -153,8 +181,10 @@
 
   const photoA = document.getElementById('photoA');
   const photoB = document.getElementById('photoB');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
 
-  // ---- Foto-Slideshow ----
+  // ---- Zufällige Reihenfolge, einmalig beim Laden der Seite erzeugt ----
   function shuffled(arr) {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) {
@@ -164,18 +194,15 @@
     return a;
   }
 
-  let order = shuffled(PHOTO_FILES);
+  const order = shuffled(PHOTO_FILES);
   let photoIndex = 0;
   let activeIsA = true;
 
-  function showNextPhoto() {
-    if (PHOTO_FILES.length === 0) return;
-    if (photoIndex >= order.length) {
-      order = shuffled(PHOTO_FILES);
-      photoIndex = 0;
-    }
+  function showPhoto(index) {
+    if (order.length === 0) return;
+    // Rundlauf: nach dem letzten Foto kommt wieder das erste, und umgekehrt
+    photoIndex = ((index % order.length) + order.length) % order.length;
     const src = order[photoIndex];
-    photoIndex++;
 
     const showing = activeIsA ? photoA : photoB;
     const hidden = activeIsA ? photoB : photoA;
@@ -190,11 +217,14 @@
     hidden.src = src;
   }
 
-  showNextPhoto();
-  setInterval(showNextPhoto, SLIDE_DAUER_SEKUNDEN * 1000);
+  prevBtn.addEventListener('click', function () {
+    showPhoto(photoIndex - 1);
+  });
+  nextBtn.addEventListener('click', function () {
+    showPhoto(photoIndex + 1);
+  });
 
-  // Sicherheitsnetz: Seite alle 2 Stunden neu laden (gegen Speicherprobleme im Dauerbetrieb)
-  setTimeout(function () { location.reload(); }, 2 * 60 * 60 * 1000);
+  showPhoto(0);
 })();
 </script>
 </body>
