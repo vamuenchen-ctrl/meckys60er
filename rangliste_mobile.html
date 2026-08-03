@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meckys 60er Quiz – Rangliste</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --plum: #3b1f2b;
+    --plum-light: #5a2f42;
+    --gold: #c9a24b;
+    --gold-light: #e6cd8a;
+    --cream: #f7f3ec;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--plum);
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  .stage {
+    position: fixed;
+    inset: 0;
+    background: var(--plum);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* --- Rangliste (Vollbild, mobil) --- */
+  .leaderboard-box {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 0 0;
+    overflow: hidden;
+  }
+  .lb-title {
+    flex: 0 0 auto;
+    color: var(--gold-light);
+    font-weight: 800;
+    font-size: 1.6rem;
+    text-align: center;
+    margin-bottom: 14px;
+    padding: 0 16px;
+  }
+  .lb-viewport {
+    flex: 1 1 auto;
+    overflow: hidden;
+    padding-bottom: 10px;
+  }
+  .lb-track {
+    will-change: transform;
+  }
+  .lb-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    color: var(--cream);
+    font-size: 1.15rem;
+    border-bottom: 1px solid rgba(230, 205, 138, 0.15);
+  }
+  .lb-rank { width: 34px; font-weight: 800; color: var(--gold-light); text-align: center; }
+  .lb-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-time { font-size: 0.95rem; color: #c9b3ba; min-width: 44px; text-align: right; }
+  .lb-score { font-weight: 700; color: var(--gold-light); min-width: 54px; text-align: right; }
+  .lb-empty { color: #d8c9cf; text-align: center; padding: 20px 16px; font-size: 1.05rem; }
+  .lb-separator {
+    text-align: center;
+    color: rgba(230, 205, 138, 0.35);
+    letter-spacing: 4px;
+    padding: 12px 0;
+    font-size: 1rem;
+  }
+
+  /* --- CTA-Button unten --- */
+  .cta-box {
+    flex: 0 0 auto;
+    padding: 18px 16px 28px;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(59,31,43,0) 0%, rgba(59,31,43,0.9) 40%, var(--plum) 100%);
+  }
+  .cta-button {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    color: var(--plum);
+    font-weight: 800;
+    font-size: 1.1rem;
+    text-decoration: none;
+    padding: 14px 32px;
+    border-radius: 999px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+    letter-spacing: 0.3px;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="leaderboard-box">
+    <div class="lb-title">🏆 Rangliste</div>
+    <div class="lb-viewport" id="lbViewport">
+      <div class="lb-track" id="lbTrack"></div>
+    </div>
+  </div>
+
+  <div class="cta-box">
+    <a class="cta-button" href="https://vamuenchen-ctrl.github.io/meckys60er/" target="_blank" rel="noopener">Zurück zum Quiz</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ==================================================================
+  // EINSTELLUNGEN - hier kannst du selbst Werte anpassen
+  // ==================================================================
+  const SCROLL_PIXEL_PRO_SEKUNDE = 22; // Wie schnell die Rangliste durchläuft
+
+  const SUPABASE_URL = 'https://hszlyokjarldgfrwjigp.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhzemx5b2tqYXJsZGdmcndqaWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMzQ3OTcsImV4cCI6MjEwMDgxMDc5N30.kGpRHs6OJLsSj5XiBHKTN_s10a7lRFv5IqyshXZhUms';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const lbViewport = document.getElementById('lbViewport');
+  const lbTrack = document.getElementById('lbTrack');
+
+  // ---- Rangliste (Endlos-Ticker) ----
+  let scrollOffset = 0;
+  let halfTrackHeight = 0;
+  let isScrolling = false;
+  let lastFrameTime = null;
+
+  function formatDuration(seconds) {
+    if (seconds == null) return '';
+    const s = Math.round(seconds);
+    if (s < 60) return s + 's';
+    const m = Math.floor(s / 60);
+    const rest = s % 60;
+    return m + ':' + String(rest).padStart(2, '0');
+  }
+
+  function buildRow(rank, name, score, total, durationSeconds) {
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    row.innerHTML =
+      '<span class="lb-rank">' + rank + '.</span>' +
+      '<span class="lb-name"></span>' +
+      '<span class="lb-time">' + formatDuration(durationSeconds) + '</span>' +
+      '<span class="lb-score">' + score + '/' + total + '</span>';
+    row.querySelector('.lb-name').textContent = name;
+    return row;
+  }
+
+  let lastAppliedSignature = null;
+  let pendingEntries = null;
+  let pendingSignature = null;
+
+  function rankEntries(entries) {
+    let rank = 0, prevScore = null, prevDuration = null;
+    return entries.map(function (e, i) {
+      if (e.score !== prevScore || e.duration_seconds !== prevDuration) {
+        rank = i + 1;
+        prevScore = e.score;
+        prevDuration = e.duration_seconds;
+      }
+      return { rank: rank, name: e.name, score: e.score, total: e.total, duration_seconds: e.duration_seconds };
+    });
+  }
+
+  // Baut die Anzeige komplett neu auf und startet den Scroll-Fortschritt bei 0 -
+  // wird nur an einem "Rundenwechsel" aufgerufen (oder wenn gerade gar nicht gescrollt wird).
+  function applyLeaderboard(rankedEntries, signature) {
+    lastAppliedSignature = signature;
+    pendingEntries = null;
+    pendingSignature = null;
+
+    lbTrack.innerHTML = '';
+    scrollOffset = 0;
+    lbTrack.style.transform = 'translateY(0px)';
+
+    if (rankedEntries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'lb-empty';
+      empty.textContent = 'Noch keine Ergebnisse.';
+      lbTrack.appendChild(empty);
+      isScrolling = false;
+      halfTrackHeight = 0;
+      return;
+    }
+
+    function appendList() {
+      rankedEntries.forEach(function (e) {
+        lbTrack.appendChild(buildRow(e.rank, e.name, e.score, e.total, e.duration_seconds));
+      });
+    }
+
+    appendList();
+    const viewportHeight = lbViewport.clientHeight;
+    const singleHeight = lbTrack.scrollHeight;
+
+    if (singleHeight <= viewportHeight) {
+      // passt komplett drauf - kein Scrollen nötig
+      isScrolling = false;
+      halfTrackHeight = 0;
+      return;
+    }
+
+    // Trennzeile + zweite Kopie für nahtloses Endlos-Scrollen
+    const sep = document.createElement('div');
+    sep.className = 'lb-separator';
+    sep.textContent = '– – –';
+    lbTrack.appendChild(sep);
+
+    // Sprungpunkt = Höhe der ersten Liste UND der Trennzeile zusammen -
+    // erst danach beginnt visuell wieder "Platz 1" (die zweite, identische Kopie).
+    const wrapDistance = lbTrack.scrollHeight;
+    appendList();
+
+    halfTrackHeight = wrapDistance;
+    isScrolling = true;
+  }
+
+  // Wird bei jedem Datenabruf aufgerufen. Während gerade gescrollt wird, werden
+  // Änderungen nur "gemerkt" und erst beim nächsten Rundenwechsel angezeigt -
+  // damit sich die Liste nie mitten im Durchlauf sichtbar verändert.
+  function handleLeaderboardData(entries) {
+    const rankedEntries = rankEntries(entries);
+    const signature = JSON.stringify(rankedEntries);
+
+    if (signature === lastAppliedSignature) {
+      pendingEntries = null;
+      pendingSignature = null;
+      return;
+    }
+
+    if (!isScrolling) {
+      // Nichts läuft gerade - kann sofort übernommen werden
+      applyLeaderboard(rankedEntries, signature);
+    } else {
+      pendingEntries = rankedEntries;
+      pendingSignature = signature;
+    }
+  }
+
+  async function refreshLeaderboard() {
+    try {
+      const { data, error } = await sb
+        .from('leaderboard')
+        .select('name, score, total, duration_seconds')
+        .order('score', { ascending: false })
+        .order('duration_seconds', { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      handleLeaderboardData(data || []);
+    } catch (e) {
+      if (lastAppliedSignature !== null || lbTrack.children.length === 0) {
+        lbTrack.innerHTML = '<div class="lb-empty">Rangliste gerade nicht verfügbar.</div>';
+        isScrolling = false;
+        lastAppliedSignature = null;
+        pendingEntries = null;
+        pendingSignature = null;
+      }
+    }
+  }
+
+  function scrollTick(timestamp) {
+    if (isScrolling) {
+      if (lastFrameTime === null) lastFrameTime = timestamp;
+      const deltaSeconds = (timestamp - lastFrameTime) / 1000;
+      lastFrameTime = timestamp;
+
+      scrollOffset += SCROLL_PIXEL_PRO_SEKUNDE * deltaSeconds;
+      if (halfTrackHeight > 0 && scrollOffset >= halfTrackHeight) {
+        if (pendingEntries !== null) {
+          // Rundenwechsel erreicht und neue Daten warten - jetzt übernehmen
+          applyLeaderboard(pendingEntries, pendingSignature);
+        } else {
+          scrollOffset -= halfTrackHeight;
+        }
+      }
+      lbTrack.style.transform = 'translateY(-' + scrollOffset + 'px)';
+    } else {
+      lastFrameTime = timestamp;
+    }
+    requestAnimationFrame(scrollTick);
+  }
+
+  refreshLeaderboard();
+  setInterval(refreshLeaderboard, 8000);
+  requestAnimationFrame(scrollTick);
+
+  // Sicherheitsnetz: Seite alle 2 Stunden neu laden (gegen Speicherprobleme im Dauerbetrieb)
+  setTimeout(function () { location.reload(); }, 2 * 60 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
