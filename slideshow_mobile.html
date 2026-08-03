@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meckys 60er Quiz – Slideshow</title>
+<style>
+  :root {
+    --plum: #3b1f2b;
+    --plum-light: #5a2f42;
+    --gold: #c9a24b;
+    --gold-light: #e6cd8a;
+    --cream: #f7f3ec;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  .stage {
+    position: fixed;
+    inset: 0;
+    background: #000;
+  }
+  .photo-stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .slide-photo {
+    position: absolute;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+  }
+  .slide-photo.visible { opacity: 1; }
+
+  /* --- CTA-Button unten --- */
+  .cta-box {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+  }
+  .cta-button {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    color: var(--plum);
+    font-weight: 800;
+    font-size: 1.15rem;
+    text-decoration: none;
+    padding: 16px 36px;
+    border-radius: 999px;
+    box-shadow: 0 6px 28px rgba(0,0,0,0.55);
+    letter-spacing: 0.3px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .cta-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 32px rgba(0,0,0,0.6);
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="photo-stage">
+    <img id="photoA" class="slide-photo" alt="Kinderfoto">
+    <img id="photoB" class="slide-photo" alt="Kinderfoto">
+  </div>
+
+  <div class="cta-box">
+    <a class="cta-button" href="https://vamuenchen-ctrl.github.io/meckys60er/" target="_blank" rel="noopener">Zum Quiz: Finde Mechtild</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ==================================================================
+  // EINSTELLUNGEN - hier kannst du selbst Werte anpassen
+  // ==================================================================
+  const SLIDE_DAUER_SEKUNDEN = 8;      // Wie lange jedes Foto zu sehen ist
+
+  // Liste der Foto-Dateien (liegen im Ordner "fotos/" im selben Repo).
+  // Weitere Fotos einfach als weitere Zeile ergänzen, z.B.: 'fotos/dein-dateiname.jpg',
+  const PHOTO_FILES = [
+    'fotos/20260724_142044.jpg',
+    'fotos/20260724_142103.jpg',
+    'fotos/20260724_142113.jpg',
+    'fotos/20260724_142200.jpg',
+    'fotos/20260724_142210.jpg',
+    'fotos/20260724_142317.jpg',
+    'fotos/20260724_142344.jpg',
+    'fotos/20260724_142457.jpg',
+    'fotos/20260724_142509.jpg',
+    'fotos/20260724_142523.jpg',
+    'fotos/20260724_142549.jpg',
+    'fotos/20260724_142601.jpg',
+    'fotos/20260724_142616.jpg',
+    'fotos/20260724_142629.jpg',
+    'fotos/20260724_142750.jpg',
+    'fotos/20260724_142800.jpg',
+    'fotos/20260724_142818.jpg',
+    'fotos/20260724_142912.jpg',
+    'fotos/20260724_143016.jpg',
+    'fotos/20260724_143051.jpg',
+    'fotos/20260724_143149.jpg',
+    'fotos/20260724_143208.jpg',
+    'fotos/20260724_143243.jpg',
+    'fotos/20260724_143251.jpg',
+    'fotos/20260724_143328.jpg',
+    'fotos/20260724_143349.jpg',
+    'fotos/20260724_151304.jpg',
+    'fotos/20260724_151749.jpg',
+    'fotos/20260724_151801.jpg',
+    'fotos/20260724_152528.jpg',
+    'fotos/x-20260724_142126.jpg',
+    'fotos/x-20260724_142145.jpg',
+    'fotos/x-20260724_142217.jpg',
+    'fotos/x-20260724_142230.jpg',
+    'fotos/x-20260724_142249.jpg',
+    'fotos/x-20260724_142256.jpg',
+    'fotos/x-20260724_142306.jpg',
+    'fotos/x-20260724_142357.jpg',
+    'fotos/x-20260724_142409.jpg',
+    'fotos/x-20260724_142432.jpg',
+    'fotos/x-20260724_142936.jpg',
+    'fotos/x-20260724_142950.jpg',
+    'fotos/x-20260724_143021.jpg',
+    'fotos/Mecky 75.jpg',
+    'fotos/Mecky 79.jpg',
+    'fotos/Mecky Kinderk 75.jpg',
+    'fotos/Mecky Pool 74.jpg',
+    'fotos/Mecky Sommer 75.jpg',
+    'fotos/Mecky Sommer 78 1.jpg',
+    'fotos/Mecky Taufe Georg 2.jpg',
+    'fotos/Mecky Taufe Georg.jpg',
+    'fotos/Mecky TG3-1.jpg',
+    'fotos/Mecky TG3-2.jpg',
+    'fotos/Mecky TG3.jpg',
+    'fotos/Mecky w78.jpg',
+    'fotos/Mecky_Leandra.jpg',
+    // Weitere Fotos hier ergänzen:
+  ];
+  // ==================================================================
+
+  const photoA = document.getElementById('photoA');
+  const photoB = document.getElementById('photoB');
+
+  // ---- Foto-Slideshow ----
+  function shuffled(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  let order = shuffled(PHOTO_FILES);
+  let photoIndex = 0;
+  let activeIsA = true;
+
+  function showNextPhoto() {
+    if (PHOTO_FILES.length === 0) return;
+    if (photoIndex >= order.length) {
+      order = shuffled(PHOTO_FILES);
+      photoIndex = 0;
+    }
+    const src = order[photoIndex];
+    photoIndex++;
+
+    const showing = activeIsA ? photoA : photoB;
+    const hidden = activeIsA ? photoB : photoA;
+
+    // Neues Foto komplett im Hintergrund laden, bevor es eingeblendet wird -
+    // dadurch kein Aufblitzen des alten Fotos mehr.
+    hidden.onload = function () {
+      hidden.classList.add('visible');
+      showing.classList.remove('visible');
+      activeIsA = !activeIsA;
+    };
+    hidden.src = src;
+  }
+
+  showNextPhoto();
+  setInterval(showNextPhoto, SLIDE_DAUER_SEKUNDEN * 1000);
+
+  // Sicherheitsnetz: Seite alle 2 Stunden neu laden (gegen Speicherprobleme im Dauerbetrieb)
+  setTimeout(function () { location.reload(); }, 2 * 60 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
