@@ -37,7 +37,8 @@
     max-height: 100%;
     object-fit: contain;
     opacity: 0;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.5s ease, transform 0.25s ease;
+    transform-origin: center center;
   }
   .slide-photo.visible { opacity: 1; }
 
@@ -67,13 +68,37 @@
   .nav-prev { left: 16px; }
   .nav-next { right: 16px; }
 
-  /* --- CTA-Button unten --- */
+  /* --- Zoom +/- Buttons --- */
+  .zoom-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(59, 31, 43, 0.72);
+    border: 1px solid rgba(230, 205, 138, 0.4);
+    color: var(--gold-light);
+    font-size: 1.5rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }
+  .zoom-button:active {
+    background: rgba(59, 31, 43, 0.9);
+  }
+
+  /* --- CTA-Box unten (Zoom-out, Button, Zoom-in) --- */
   .cta-box {
     position: absolute;
     bottom: 32px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
   .cta-button {
     display: inline-block;
@@ -106,7 +131,9 @@
   <button class="nav-button nav-next" id="nextBtn" aria-label="Nächstes Foto">&gt;</button>
 
   <div class="cta-box">
+    <button class="zoom-button" id="zoomOutBtn" aria-label="Verkleinern">&minus;</button>
     <a class="cta-button" href="https://vamuenchen-ctrl.github.io/meckys60er/" rel="noopener">Zurück zum Quiz</a>
+    <button class="zoom-button" id="zoomInBtn" aria-label="Vergrößern">&plus;</button>
   </div>
 </div>
 
@@ -189,6 +216,28 @@
   const photoB = document.getElementById('photoB');
   const prevBtn = document.getElementById('prevBtn');
   const nextBtn = document.getElementById('nextBtn');
+  const zoomInBtn = document.getElementById('zoomInBtn');
+  const zoomOutBtn = document.getElementById('zoomOutBtn');
+
+  // ---- Zoom ----
+  const ZOOM_STEP = 0.5;
+  const ZOOM_MIN = 1;
+  const ZOOM_MAX = 3;
+  let zoomLevel = 1;
+
+  function applyZoom() {
+    const t = `scale(${zoomLevel})`;
+    photoA.style.transform = t;
+    photoB.style.transform = t;
+  }
+  zoomInBtn.addEventListener('click', function () {
+    zoomLevel = Math.min(ZOOM_MAX, zoomLevel + ZOOM_STEP);
+    applyZoom();
+  });
+  zoomOutBtn.addEventListener('click', function () {
+    zoomLevel = Math.max(ZOOM_MIN, zoomLevel - ZOOM_STEP);
+    applyZoom();
+  });
 
   // ---- Zufällige Reihenfolge, einmalig beim Laden der Seite erzeugt ----
   function shuffled(arr) {
@@ -209,6 +258,9 @@
     // Rundlauf: nach dem letzten Foto kommt wieder das erste, und umgekehrt
     photoIndex = ((index % order.length) + order.length) % order.length;
     const src = order[photoIndex];
+
+    zoomLevel = 1;
+    applyZoom();
 
     const showing = activeIsA ? photoA : photoB;
     const hidden = activeIsA ? photoB : photoA;
