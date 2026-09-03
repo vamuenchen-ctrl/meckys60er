@@ -30,6 +30,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    touch-action: none;
+    cursor: grab;
+  }
+  .photo-stage.dragging {
+    cursor: grabbing;
   }
   .slide-photo {
     position: absolute;
@@ -37,8 +42,10 @@
     max-height: 100%;
     object-fit: contain;
     opacity: 0;
-    transition: opacity 0.5s ease, transform 0.25s ease;
+    transition: opacity 0.5s ease;
     transform-origin: center center;
+    -webkit-user-drag: none;
+    user-select: none;
   }
   .slide-photo.visible { opacity: 1; }
 
@@ -214,30 +221,86 @@
 
   const photoA = document.getElementById('photoA');
   const photoB = document.getElementById('photoB');
+  const photoStage = document.querySelector('.photo-stage');
   const prevBtn = document.getElementById('prevBtn');
   const nextBtn = document.getElementById('nextBtn');
   const zoomInBtn = document.getElementById('zoomInBtn');
   const zoomOutBtn = document.getElementById('zoomOutBtn');
 
-  // ---- Zoom ----
+  // ---- Zoom & Verschieben (Pan) ----
   const ZOOM_STEP = 0.5;
   const ZOOM_MIN = 1;
   const ZOOM_MAX = 3;
   let zoomLevel = 1;
+  let panX = 0;
+  let panY = 0;
 
-  function applyZoom() {
-    const t = `scale(${zoomLevel})`;
+  function currentImg() {
+    return activeIsA ? photoA : photoB;
+  }
+
+  // Begrenzt das Verschieben so, dass das Foto den Bildschirm nicht komplett verlässt
+  function clampPan() {
+    const img = currentImg();
+    const baseW = img.offsetWidth;
+    const baseH = img.offsetHeight;
+    const maxX = Math.max(0, (baseW * zoomLevel - window.innerWidth) / 2);
+    const maxY = Math.max(0, (baseH * zoomLevel - window.innerHeight) / 2);
+    panX = Math.min(maxX, Math.max(-maxX, panX));
+    panY = Math.min(maxY, Math.max(-maxY, panY));
+  }
+
+  function applyZoom(withTransition) {
+    photoA.style.transition = withTransition ? 'opacity 0.5s ease, transform 0.25s ease' : 'opacity 0.5s ease';
+    photoB.style.transition = photoA.style.transition;
+    const t = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
     photoA.style.transform = t;
     photoB.style.transform = t;
+    photoStage.style.cursor = zoomLevel > 1 ? 'grab' : 'default';
   }
   zoomInBtn.addEventListener('click', function () {
     zoomLevel = Math.min(ZOOM_MAX, zoomLevel + ZOOM_STEP);
-    applyZoom();
+    clampPan();
+    applyZoom(true);
   });
   zoomOutBtn.addEventListener('click', function () {
     zoomLevel = Math.max(ZOOM_MIN, zoomLevel - ZOOM_STEP);
-    applyZoom();
+    if (zoomLevel === ZOOM_MIN) { panX = 0; panY = 0; }
+    clampPan();
+    applyZoom(true);
   });
+
+  // ---- Verschieben per Maus (PC) oder Finger (Smartphone) ----
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let panStartX = 0;
+  let panStartY = 0;
+
+  photoStage.addEventListener('pointerdown', function (e) {
+    if (zoomLevel <= 1) return; // nur verschiebbar, wenn reingezoomt
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    panStartX = panX;
+    panStartY = panY;
+    photoStage.classList.add('dragging');
+    photoStage.setPointerCapture(e.pointerId);
+  });
+  photoStage.addEventListener('pointermove', function (e) {
+    if (!isDragging) return;
+    panX = panStartX + (e.clientX - dragStartX);
+    panY = panStartY + (e.clientY - dragStartY);
+    clampPan();
+    applyZoom(false);
+  });
+  function endDrag() {
+    isDragging = false;
+    photoStage.classList.remove('dragging');
+  }
+  photoStage.addEventListener('pointerup', endDrag);
+  photoStage.addEventListener('pointercancel', endDrag);
+  photoStage.addEventListener('pointerleave', endDrag);
 
   // ---- Zufällige Reihenfolge, einmalig beim Laden der Seite erzeugt ----
   function shuffled(arr) {
@@ -260,7 +323,9 @@
     const src = order[photoIndex];
 
     zoomLevel = 1;
-    applyZoom();
+    panX = 0;
+    panY = 0;
+    applyZoom(false);
 
     const showing = activeIsA ? photoA : photoB;
     const hidden = activeIsA ? photoB : photoA;
