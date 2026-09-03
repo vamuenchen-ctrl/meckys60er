@@ -75,8 +75,11 @@
   .nav-prev { left: 16px; }
   .nav-next { right: 16px; }
 
-  /* --- Zoom +/- Buttons --- */
+  /* --- Zoom +/- Buttons: weiter außen, unten links/rechts --- */
   .zoom-button {
+    position: absolute;
+    bottom: 32px;
+    z-index: 10;
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -90,22 +93,20 @@
     justify-content: center;
     cursor: pointer;
     box-shadow: 0 4px 18px rgba(0,0,0,0.5);
-    flex-shrink: 0;
   }
   .zoom-button:active {
     background: rgba(59, 31, 43, 0.9);
   }
+  .zoom-out { left: 16px; }
+  .zoom-in { right: 16px; }
 
-  /* --- CTA-Box unten (Zoom-out, Button, Zoom-in) --- */
+  /* --- CTA-Button unten --- */
   .cta-box {
     position: absolute;
     bottom: 32px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 10;
-    display: flex;
-    align-items: center;
-    gap: 14px;
   }
   .cta-button {
     display: inline-block;
@@ -137,10 +138,11 @@
   <button class="nav-button nav-prev" id="prevBtn" aria-label="Vorheriges Foto">&lt;</button>
   <button class="nav-button nav-next" id="nextBtn" aria-label="Nächstes Foto">&gt;</button>
 
+  <button class="zoom-button zoom-out" id="zoomOutBtn" aria-label="Verkleinern">&minus;</button>
+  <button class="zoom-button zoom-in" id="zoomInBtn" aria-label="Vergrößern">&plus;</button>
+
   <div class="cta-box">
-    <button class="zoom-button" id="zoomOutBtn" aria-label="Verkleinern">&minus;</button>
     <a class="cta-button" href="https://vamuenchen-ctrl.github.io/meckys60er/" rel="noopener">Zurück zum Quiz</a>
-    <button class="zoom-button" id="zoomInBtn" aria-label="Vergrößern">&plus;</button>
   </div>
 </div>
 
