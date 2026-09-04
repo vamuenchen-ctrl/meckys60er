@@ -21,11 +21,13 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0;
-    height: 100%;
+    min-height: 100%;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--plum);
     color: var(--cream);
     overscroll-behavior: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .app {
     max-width: 520px;
@@ -90,6 +92,12 @@
   .btn-primary { background: var(--gold); color: var(--plum); }
   .btn-primary:hover { background: var(--gold-light); }
   .btn-primary:disabled { opacity: 0.4; }
+  #nextBtn {
+    position: sticky;
+    bottom: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+    z-index: 5;
+  }
   .btn-secondary {
     background: transparent;
     color: var(--gold-light);
@@ -142,6 +150,7 @@
     position: relative;
     width: 100%;
     aspect-ratio: 1 / 1;
+    max-height: 42vh;
     background: #1a0d13;
     border-radius: 14px;
     overflow: auto;
