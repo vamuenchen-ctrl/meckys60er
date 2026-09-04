@@ -622,6 +622,16 @@
     });
   }
 
+  function forceScrollReflow() {
+    // Manche Mobil-Browser aktualisieren den Touch-Scroll-Bereich nicht automatisch,
+    // wenn Inhalt nachträglich per JS eingefügt wird. Ein erzwungener Reflow behebt das.
+    requestAnimationFrame(function () {
+      document.body.style.display = 'none';
+      void document.body.offsetHeight;
+      document.body.style.display = '';
+    });
+  }
+
   function formatDuration(seconds) {
     if (seconds == null) return '';
     const s = Math.round(seconds);
@@ -641,8 +651,12 @@
     showScreen('leaderboard');
     await submitScoreIfNeeded();
     await loadLeaderboard();
+    forceScrollReflow();
   });
-  refreshLbBtn.addEventListener('click', loadLeaderboard);
+  refreshLbBtn.addEventListener('click', async function () {
+    await loadLeaderboard();
+    forceScrollReflow();
+  });
 
   function startNewRound() {
     order = shuffled(PHOTO_META.length);
