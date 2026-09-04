@@ -45,6 +45,11 @@
   .lb-time { font-size: 0.95rem; color: #c9b3ba; min-width: 44px; text-align: right; }
   .lb-score { font-weight: 700; color: var(--gold-light); min-width: 54px; text-align: right; }
   .lb-empty { color: #d8c9cf; text-align: center; padding: 20px 16px; font-size: 1.05rem; }
+  .lb-row-me {
+    background: rgba(201,162,75,0.18);
+    border-radius: 12px;
+    box-shadow: 0 0 0 2px rgba(230,205,138,0.6) inset;
+  }
 
   /* --- CTA-Button: immer unten fixiert --- */
   .cta-box {
@@ -86,6 +91,8 @@
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const lbList = document.getElementById('lbList');
+  const highlightId = new URLSearchParams(location.search).get('highlight') || '';
+  let hasScrolledToHighlight = false;
 
   function formatDuration(seconds) {
     if (seconds == null) return '';
@@ -96,9 +103,9 @@
     return m + ':' + String(rest).padStart(2, '0');
   }
 
-  function buildRow(rank, name, score, total, durationSeconds) {
+  function buildRow(rank, name, score, total, durationSeconds, isMe) {
     const row = document.createElement('div');
-    row.className = 'lb-row';
+    row.className = 'lb-row' + (isMe ? ' lb-row-me' : '');
     row.innerHTML =
       '<span class="lb-rank">' + rank + '.</span>' +
       '<span class="lb-name"></span>' +
@@ -116,7 +123,7 @@
         prevScore = e.score;
         prevDuration = e.duration_seconds;
       }
-      return { rank: rank, name: e.name, score: e.score, total: e.total, duration_seconds: e.duration_seconds };
+      return { rank: rank, session_id: e.session_id, name: e.name, score: e.score, total: e.total, duration_seconds: e.duration_seconds };
     });
   }
 
@@ -133,16 +140,27 @@
       return;
     }
 
+    let meRow = null;
     rankedEntries.forEach(function (e) {
-      lbList.appendChild(buildRow(e.rank, e.name, e.score, e.total, e.duration_seconds));
+      const isMe = !!highlightId && e.session_id === highlightId;
+      const row = buildRow(e.rank, e.name, e.score, e.total, e.duration_seconds, isMe);
+      if (isMe) meRow = row;
+      lbList.appendChild(row);
     });
+
+    if (meRow && !hasScrolledToHighlight) {
+      hasScrolledToHighlight = true;
+      requestAnimationFrame(function () {
+        meRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
   }
 
   async function refreshLeaderboard() {
     try {
       const { data, error } = await sb
         .from('leaderboard')
-        .select('name, score, total, duration_seconds')
+        .select('session_id, name, score, total, duration_seconds')
         .order('score', { ascending: false })
         .order('duration_seconds', { ascending: true, nullsFirst: false });
       if (error) throw error;

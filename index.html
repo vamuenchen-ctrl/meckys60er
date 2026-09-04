@@ -234,29 +234,6 @@
   .result-label { color: #d8c9cf; margin-bottom: 24px; }
   .result-actions { display: flex; flex-direction: column; gap: 12px; }
 
-  /* --- Leaderboard --- */
-  .lb-list { list-style: none; padding: 0; margin: 0; }
-  .lb-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 10px;
-    border-bottom: 1px solid rgba(230,205,138,0.12);
-  }
-  .lb-item:last-child { border-bottom: none; }
-  .lb-rank {
-    width: 28px;
-    text-align: center;
-    font-weight: 800;
-    color: var(--gold-light);
-  }
-  .lb-name { flex: 1; font-weight: 600; }
-  .lb-time { font-size: 0.8rem; color: #c9b3ba; min-width: 34px; text-align: right; }
-  .lb-score { font-weight: 700; color: var(--gold-light); }
-  .lb-me { background: rgba(201,162,75,0.12); border-radius: 10px; }
-  .lb-empty { text-align: center; color: #c9b3ba; padding: 20px 0; }
-  .lb-actions { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
-
   .privacy-note {
     font-size: 0.75rem;
     color: #b8a3ab;
@@ -323,24 +300,13 @@
     </div>
   </div>
 
-  <!-- SCREEN: Leaderboard -->
-  <div class="screen" id="screen-leaderboard">
-    <h2 style="color: var(--gold-light); text-align:center; margin-top:0;">Rangliste</h2>
-    <ul class="lb-list" id="lbList"></ul>
-    <div class="lb-empty" id="lbEmpty" style="display:none;">Noch keine Ergebnisse.</div>
-    <div class="lb-actions">
-      <button class="btn-primary" id="playAgainFromLbBtn">Nochmal spielen</button>
-      <button class="btn-secondary" id="refreshLbBtn" style="width:100%;">Aktualisieren</button>
-      <button class="btn-secondary" id="backToOverviewBtn" style="width:100%;" onclick="window.location.href='https://vamuenchen-ctrl.github.io/meckys60er/index.html'">Zurück zur Übersicht</button>
-    </div>
-  </div>
-
 </div>
 
 <script>
 (function () {
   // ---- Spiel-Zustand ----
   let playerName = '';
+  let sessionId = null;  // eindeutige ID pro Seitenaufruf, verhindert Verwechslung bei gleichen Namen
   let order = [];        // gemischte Indizes in PHOTO_META
   let currentPos = 0;    // Position innerhalb von order
   let score = 0;
@@ -349,6 +315,18 @@
   let roundStartTime = null;
   let lastDurationSeconds = null;
   const HIT_RADIUS = 11;  // Prozentpunkte Toleranz
+
+  function generateSessionId() {
+    if (window.crypto && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    // Fallback fuer aeltere Browser ohne crypto.randomUUID
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
 
   // ---- Supabase (Rangliste) ----
   const SUPABASE_URL = 'https://hszlyokjarldgfrwjigp.supabase.co';
@@ -361,7 +339,6 @@
     name: document.getElementById('screen-name'),
     play: document.getElementById('screen-play'),
     result: document.getElementById('screen-result'),
-    leaderboard: document.getElementById('screen-leaderboard'),
   };
 
   const mainSubtitle = document.getElementById('mainSubtitle');
@@ -369,7 +346,6 @@
   function showScreen(key) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[key].classList.add('active');
-    mainSubtitle.style.display = (key === 'leaderboard') ? 'none' : 'block';
   }
 
   function shuffled(n) {
@@ -406,11 +382,6 @@
   const showLeaderboardBtn = document.getElementById('showLeaderboardBtn');
   const playAgainBtn = document.getElementById('playAgainBtn');
 
-  const lbList = document.getElementById('lbList');
-  const lbEmpty = document.getElementById('lbEmpty');
-  const refreshLbBtn = document.getElementById('refreshLbBtn');
-  const playAgainFromLbBtn = document.getElementById('playAgainFromLbBtn');
-
   // ---- Name-Screen ----
   startBtn.addEventListener('click', function () {
     const name = nameInput.value.trim();
@@ -419,6 +390,7 @@
       return;
     }
     playerName = name;
+    sessionId = generateSessionId();
     order = shuffled(PHOTO_META.length);
     currentPos = 0;
     score = 0;
@@ -544,7 +516,7 @@
       const { data: existing } = await sb
         .from('leaderboard')
         .select('score, duration_seconds')
-        .eq('name', playerName)
+        .eq('session_id', sessionId)
         .maybeSingle();
 
       const existingDuration = existing && existing.duration_seconds != null
@@ -557,111 +529,24 @@
 
       if (isBetter) {
         await sb.from('leaderboard').upsert({
+          session_id: sessionId,
           name: playerName,
           score: score,
           total: PHOTO_META.length,
           duration_seconds: lastDurationSeconds,
           finished_at: new Date().toISOString()
-        }, { onConflict: 'name' });
+        }, { onConflict: 'session_id' });
       }
     } catch (e) {
       // Speichern fehlgeschlagen - dann taucht dieser Versuch einfach nicht in der Rangliste auf
     }
   }
 
-  async function loadLeaderboard() {
-    lbList.innerHTML = '';
-    lbEmpty.style.display = 'none';
-    let entries = [];
-    let loadFailed = false;
-    try {
-      const { data, error } = await sb
-        .from('leaderboard')
-        .select('name, score, total, duration_seconds')
-        .order('score', { ascending: false })
-        .order('duration_seconds', { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      entries = data || [];
-    } catch (e) {
-      loadFailed = true;
-    }
-
-    if (loadFailed) {
-      lbEmpty.textContent = 'Rangliste ist gerade nicht verfügbar.';
-      lbEmpty.style.display = 'block';
-      return;
-    }
-
-    if (entries.length === 0) {
-      lbEmpty.textContent = 'Noch keine Ergebnisse.';
-      lbEmpty.style.display = 'block';
-      return;
-    }
-
-    // Bei Punktegleichheit entscheidet die Zeit (schneller = besserer Rang) -
-    // nur bei exakt gleicher Punktzahl UND Zeit teilen sich zwei den gleichen Rang.
-    let rank = 0;
-    let prevScore = null;
-    let prevDuration = null;
-    entries.forEach((entry, i) => {
-      if (entry.score !== prevScore || entry.duration_seconds !== prevDuration) {
-        rank = i + 1;
-        prevScore = entry.score;
-        prevDuration = entry.duration_seconds;
-      }
-      const li = document.createElement('li');
-      li.className = 'lb-item' + (entry.name === playerName ? ' lb-me' : '');
-      li.innerHTML = `
-        <span class="lb-rank">${rank}.</span>
-        <span class="lb-name">${escapeHtml(entry.name)}</span>
-        <span class="lb-time">${formatDuration(entry.duration_seconds)}</span>
-        <span class="lb-score">${entry.score}/${entry.total}</span>
-      `;
-      lbList.appendChild(li);
-    });
-  }
-
-  function forceScrollReflow() {
-    // Manche Mobil-Browser aktualisieren den Touch-Scroll-Bereich bzw. das Layout nicht
-    // automatisch, wenn sich der aktive Screen wechselt oder Inhalt nachträglich per JS
-    // eingefügt wird. Diese Kombination aus Display-Toggle und 1px-Scroll-Trick erzwingt
-    // zuverlässig ein Neu-Layout/Repaint.
-    document.body.style.display = 'none';
-    void document.body.offsetHeight;
-    document.body.style.display = '';
-    requestAnimationFrame(function () {
-      window.scrollTo(0, 1);
-      requestAnimationFrame(function () {
-        window.scrollTo(0, 0);
-      });
-    });
-  }
-
-  function formatDuration(seconds) {
-    if (seconds == null) return '';
-    const s = Math.round(seconds);
-    if (s < 60) return s + 's';
-    const m = Math.floor(s / 60);
-    const rest = s % 60;
-    return m + ':' + String(rest).padStart(2, '0');
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
   showLeaderboardBtn.addEventListener('click', async function () {
-    showScreen('leaderboard');
-    forceScrollReflow();
     await submitScoreIfNeeded();
-    await loadLeaderboard();
-    forceScrollReflow();
-  });
-  refreshLbBtn.addEventListener('click', async function () {
-    await loadLeaderboard();
-    forceScrollReflow();
+    window.location.href =
+      'https://vamuenchen-ctrl.github.io/meckys60er/rangliste_mobile.html?highlight=' +
+      encodeURIComponent(sessionId);
   });
 
   function startNewRound() {
@@ -674,7 +559,6 @@
   }
 
   playAgainBtn.addEventListener('click', startNewRound);
-  playAgainFromLbBtn.addEventListener('click', startNewRound);
 
 })();
 </script>
