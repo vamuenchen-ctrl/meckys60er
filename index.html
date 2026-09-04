@@ -92,12 +92,6 @@
   .btn-primary { background: var(--gold); color: var(--plum); }
   .btn-primary:hover { background: var(--gold-light); }
   .btn-primary:disabled { opacity: 0.4; }
-  #nextBtn {
-    position: sticky;
-    bottom: 10px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.45);
-    z-index: 5;
-  }
   .btn-secondary {
     background: transparent;
     color: var(--gold-light);
@@ -514,6 +508,9 @@
     scorePill.textContent = `${score} richtig`;
     nextBtn.style.display = 'block';
     nextBtn.textContent = (currentPos === PHOTO_META.length - 1) ? 'Ergebnis ansehen' : 'Weiter';
+    setTimeout(function () {
+      nextBtn.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 50);
   });
 
   nextBtn.addEventListener('click', function () {
