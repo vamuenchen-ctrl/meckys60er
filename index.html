@@ -623,12 +623,18 @@
   }
 
   function forceScrollReflow() {
-    // Manche Mobil-Browser aktualisieren den Touch-Scroll-Bereich nicht automatisch,
-    // wenn Inhalt nachträglich per JS eingefügt wird. Ein erzwungener Reflow behebt das.
+    // Manche Mobil-Browser aktualisieren den Touch-Scroll-Bereich bzw. das Layout nicht
+    // automatisch, wenn sich der aktive Screen wechselt oder Inhalt nachträglich per JS
+    // eingefügt wird. Diese Kombination aus Display-Toggle und 1px-Scroll-Trick erzwingt
+    // zuverlässig ein Neu-Layout/Repaint.
+    document.body.style.display = 'none';
+    void document.body.offsetHeight;
+    document.body.style.display = '';
     requestAnimationFrame(function () {
-      document.body.style.display = 'none';
-      void document.body.offsetHeight;
-      document.body.style.display = '';
+      window.scrollTo(0, 1);
+      requestAnimationFrame(function () {
+        window.scrollTo(0, 0);
+      });
     });
   }
 
@@ -649,6 +655,7 @@
 
   showLeaderboardBtn.addEventListener('click', async function () {
     showScreen('leaderboard');
+    forceScrollReflow();
     await submitScoreIfNeeded();
     await loadLeaderboard();
     forceScrollReflow();
